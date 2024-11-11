@@ -115,6 +115,7 @@ pymysql = "^1.1.1"
 mini-racer = "^0.12.4"
 pyicu = "^2.13.1"
 flasgger = "^0.9.7.1"
+pymupdf = "^1.23.8"
 
 
 [tool.poetry.group.full]

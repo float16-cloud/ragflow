@@ -23,6 +23,7 @@ from PIL import Image, ImageDraw
 import numpy as np
 from timeit import default_timer as timer
 from pypdf import PdfReader as pdf2_read
+import fitz  # เพิ่ม import สำหรับ pymupdf
 
 from api.settings import LIGHTEN
 from api.utils.file_utils import get_project_base_directory
@@ -935,9 +936,8 @@ class RAGFlowPdfParser:
     @staticmethod
     def total_page_number(fnm, binary=None):
         try:
-            pdf = pdfplumber.open(
-                fnm) if not binary else pdfplumber.open(BytesIO(binary))
-            return len(pdf.pages)
+            pdf = fitz.open(fnm) if not binary else fitz.open(stream=binary)
+            return pdf.page_count
         except Exception as e:
             logging.error(str(e))
 
@@ -952,16 +952,48 @@ class RAGFlowPdfParser:
         self.page_layout = []
         self.page_from = page_from
         st = timer()
+        
         try:
-            self.pdf = pdfplumber.open(fnm) if isinstance(
-                fnm, str) else pdfplumber.open(BytesIO(fnm))
-            self.page_images = [p.to_image(resolution=72 * zoomin).annotated for i, p in
-                                enumerate(self.pdf.pages[page_from:page_to])]
-            self.page_images_x2 = [p.to_image(resolution=72 * zoomin * 2).annotated for i, p in
-                                enumerate(self.pdf.pages[page_from:page_to])]
-            self.page_chars = [[{**c, 'top': c['top'], 'bottom': c['bottom']} for c in page.dedupe_chars().chars if self._has_color(c)] for page in
-                               self.pdf.pages[page_from:page_to]]
-            self.total_page = len(self.pdf.pages)
+            # เปลี่ยนจาก pdfplumber เป็น pymupdf
+            self.pdf = fitz.open(fnm) if isinstance(fnm, str) else fitz.open(stream=fnm)
+            
+            # สร้าง images และ extract text
+            self.page_images = []
+            self.page_chars = []
+            
+            for page_num in range(page_from, min(page_to, self.pdf.page_count)):
+                page = self.pdf[page_num]
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoomin, zoomin))
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                self.page_images.append(img)
+                
+                # Extract text blocks
+                blocks = page.get_text("dict")["blocks"]
+                chars = []
+                for b in blocks:
+                    if "lines" in b:
+                        for l in b["lines"]:
+                            for s in l["spans"]:
+                                chars.extend([{
+                                    'text': c,
+                                    'x0': s['bbox'][0],
+                                    'x1': s['bbox'][2], 
+                                    'top': s['bbox'][1],
+                                    'bottom': s['bbox'][3],
+                                    'width': (s['bbox'][2] - s['bbox'][0])/len(s['text']),
+                                    'height': s['bbox'][3] - s['bbox'][1]
+                                } for c in s['text']])
+                self.page_chars.append(chars)
+                
+            self.page_images_x2 = []
+            for page_num in range(page_from, min(page_to, self.pdf.page_count)):
+                page = self.pdf[page_num] 
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoomin*2, zoomin*2))
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                self.page_images_x2.append(img)
+                
+            self.total_page = self.pdf.page_count
+
         except Exception as e:
             logging.error(str(e))
 

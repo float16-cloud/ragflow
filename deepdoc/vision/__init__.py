@@ -11,7 +11,7 @@
 #  limitations under the License.
 #
 
-import pdfplumber
+import fitz
 
 from .ocr import OCR
 from .recognizer import Recognizer
@@ -32,12 +32,13 @@ def init_in_out(args):
 
     def pdf_pages(fnm, zoomin=3):
         nonlocal outputs, images
-        pdf = pdfplumber.open(fnm)
-        images = [p.to_image(resolution=72 * zoomin).annotated for i, p in
-                            enumerate(pdf.pages)]
-
-        for i, page in enumerate(images):
-            outputs.append(os.path.split(fnm)[-1] + f"_{i}.jpg")
+        pdf = fitz.open(fnm)
+        for page_num in range(pdf.page_count):
+            page = pdf[page_num]
+            pix = page.get_pixmap(matrix=fitz.Matrix(zoomin, zoomin))
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            images.append(img)
+            outputs.append(os.path.split(fnm)[-1] + f"_{page_num}.jpg")
 
     def images_and_outputs(fnm):
         nonlocal outputs, images
