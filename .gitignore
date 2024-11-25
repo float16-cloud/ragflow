@@ -36,3 +36,10 @@ sdk/python/ragflow.egg-info/
 sdk/python/build/
 sdk/python/dist/
 sdk/python/ragflow_sdk.egg-info/
+
+.venv
+*.jar
+*.jar.md5
+*.deb
+huggingface.co
+nltk_data
